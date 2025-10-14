@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Part Cross‑Reference — OLD↔NEW (with Diagnostics)</title>
+  <title>Part Cross‑Reference — OLD↔NEW (Diagnostics v2)</title>
   <style>
-    :root{--bg:#0f172a;--panel:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2937;--accent:#1d4ed8;--brand:#60a5fa}
+    :root{--bg:#0f172a;--panel:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2937;--accent:#1d4ed8}
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(180deg,#0b1024,#0f172a);color:var(--ink)}
     header{padding:22px 16px;text-align:center}
@@ -25,8 +25,7 @@
     .content{display:grid;grid-template-columns: 1fr 360px;gap:14px;padding:14px}
     .section{padding:0 0 8px}
     .result{display:grid;grid-template-columns: 220px 1fr;gap:8px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#0b1220}
-    .k{color:#93c5fd}
-    .v{color:var(--ink)}
+    .k{color:#93c5fd}.v{color:var(--ink)}
     .list{display:flex;flex-direction:column;gap:10px}
     .msg{padding:12px;border:1px dashed #334155;border-radius:10px;color:var(--muted);background:#0b1220}
     .grid{width:100%;border-collapse:separate;border-spacing:0}
@@ -34,61 +33,80 @@
     td{border-bottom:1px dashed #1f2937;padding:8px;vertical-align:top}
     code{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:1px 6px}
     .card{border:1px solid #334155;border-radius:12px;padding:12px;background:#0b1220}
-    .small{font-size:12px;color:var(--muted)}
+    .small{font-size:12px;color:#94a3b8}
     .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid #334155;border-radius:999px;padding:2px 8px;background:#0b1220;color:#93c5fd;font-size:12px}
     .debug-list{font-size:12px;color:#cbd5e1;line-height:1.5}
     .samples button{margin:4px 4px 0 0}
   </style>
 </head>
 <body>
-  <header>
-    <h1>Part Cross‑Reference</h1>
-    <div class="hint">Two modes: <b>OLD → NEW</b> and <b>NEW → OLD</b>. Data auto‑loads from <code>parts.csv</code> in this repository. This build includes a diagnostics sidebar to help troubleshoot.</div>
-  </header>
+<header>
+  <h1>Part Cross‑Reference</h1>
+  <div class="hint">Diagnostics build: handles CRLF/CR/LF line endings and auto-detects comma/semicolon/tab delimiters. Data auto-loads from <code>parts.csv</code>.</div>
+</header>
 
-  <div class="wrap">
-    <div class="panel">
-      <div class="toolbar">
-        <div class="tabs">
-          <button class="tab active" id="tab-oldnew">OLD → NEW</button>
-          <button class="tab" id="tab-newold">NEW → OLD</button>
-        </div>
-        <input id="q" type="text" placeholder="Enter part number…" autocomplete="off" />
-        <button id="search" class="btn primary">Search</button>
-        <span id="badge" class="badge">Loading…</span>
+<div class="wrap">
+  <div class="panel">
+    <div class="toolbar">
+      <div class="tabs">
+        <button class="tab active" id="tab-oldnew">OLD → NEW</button>
+        <button class="tab" id="tab-newold">NEW → OLD</button>
       </div>
+      <input id="q" type="text" placeholder="Enter part number…" autocomplete="off" />
+      <button id="search" class="btn primary">Search</button>
+      <span id="badge" class="badge">Loading…</span>
+    </div>
 
-      <div class="meta">
-        <div>Rows: <span id="rowCount">0</span> • Rows missing Part#: <span id="rowMissing">0</span></div>
-        <div>Mode: <b id="modeName">OLD → NEW</b> • Normalized input: <code id="normPreview">—</code></div>
+    <div class="meta">
+      <div>Rows: <span id="rowCount">0</span> • Rows missing Part#: <span id="rowMissing">0</span></div>
+      <div>Mode: <b id="modeName">OLD → NEW</b> • Normalized input: <code id="normPreview">—</code></div>
+    </div>
+
+    <div class="content">
+      <div class="section">
+        <div id="results"></div>
       </div>
-
-      <div class="content">
-        <div class="section">
-          <div id="results"></div>
-        </div>
-
-        <aside class="section">
-          <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-              <div class="pill">Diagnostics</div>
-              <button id="refresh" class="btn">Reload data</button>
-            </div>
-            <div class="debug-list" id="debugInfo">Parsing…</div>
-            <div class="samples" id="samples"></div>
+      <aside class="section">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+            <div class="pill">Diagnostics</div>
+            <button id="refresh" class="btn">Reload data</button>
           </div>
-        </aside>
-      </div>
+          <div class="debug-list" id="debugInfo">Parsing…</div>
+          <div class="samples" id="samples"></div>
+        </div>
+      </aside>
     </div>
   </div>
+</div>
 
 <script>
-// ==== Normalization ====
 function normalize(s){ return String(s||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase(); }
 
-// ==== Robust CSV (quoted commas) ====
+// Get the first line end index and delimiter from the first line
+function detectDelimiterAndLineEnd(text){
+  // find first line break: \r\n, \n, or \r
+  let i = text.indexOf("\\r\\n");
+  let len = 2;
+  if(i === -1){ i = text.indexOf("\\n"); len = 1; }
+  if(i === -1){ i = text.indexOf("\\r"); len = 1; }
+  if(i === -1){ i = text.length; len = 0; } // single-line file
+  const firstLine = text.slice(0, i);
+  const counts = {',':0,';':0,'\\t':0};
+  for(const ch of firstLine){ if(ch===',') counts[',']++; else if(ch===';') counts[';']++; }
+  const tabCount = (firstLine.match(/\\t/g)||[]).length; counts['\\t']=tabCount;
+  // pick delimiter with highest count
+  let delim = ','; let max = counts[','];
+  if(counts[';'] > max){ delim = ';'; max = counts[';']; }
+  if(counts['\\t'] > max){ delim = '\\t'; max = counts['\\t']; }
+  return {delim, lineBreakLen: len};
+}
+
+// Robust CSV parser with chosen delimiter and CRLF/LF/CR line-ends
 function parseCSV(text){
+  const {delim} = detectDelimiterAndLineEnd(text);
   const rows = []; let i=0, ch, inQ=false, field='', row=[];
+  const D = (delim==='\\t') ? '\\t' : delim; // actual delimiter char
   function pushField(){ row.push(field); field=''; }
   function pushRow(){ rows.push(row); row=[]; }
   while(i<text.length){
@@ -98,40 +116,40 @@ function parseCSV(text){
       field += ch; i++; continue;
     }else{
       if(ch === '"'){ inQ=true; i++; continue; }
-      if(ch === ','){ pushField(); i++; continue; }
-      if(ch === '\\r'){ i++; continue; }
+      if((D==='\\t' && ch === '\\t') || (D!== '\\t' && ch === D)){ pushField(); i++; continue; }
+      if(ch === '\\r'){ // handle CR or CRLF
+        if(text[i+1] === '\\n'){ i++; } // skip the LF in CRLF
+        pushField(); pushRow(); i++; continue;
+      }
       if(ch === '\\n'){ pushField(); pushRow(); i++; continue; }
       field += ch; i++; continue;
     }
   }
   if(field.length>0 || row.length>0){ pushField(); pushRow(); }
+
   const header = rows.shift().map(h=>h.trim());
   const objs = rows.filter(r=>r.length && r.some(x=>x!=='')).map(cols=>{
     const o={}; header.forEach((h,idx)=>o[h]=(cols[idx]||'').trim()); return o;
   });
-  return {header, rows: objs};
+  return {header, rows: objs, delimiter: D};
 }
 
-// ==== Flexible header mapping ====
-// We accept variants like "Part#", "Part #", "Part Number", etc.
+// Header mapping with synonyms
 const TARGET = ["Part#","Product#","Product Line","Status","Standard","Non Standard","Sample","Details 1","Details 2"];
 const SYN = {
   "Part#": ["part#","part #","partnumber","part number","part_no","partno","old part","old part#","old part number"],
   "Product#": ["product#","product #","product id","productid","product number"],
   "Product Line": ["product line","line","family","productline"],
   "Status": ["status","state"],
-  "Standard": ["standard","new part","new part#","newpart","replacement","replacement part"],
+  "Standard": ["standard","new part","new part#","newpart","replacement","replacement part","new"],
   "Non Standard": ["non standard","non-standard","ns info","custom","custom info"],
   "Sample": ["sample","sample part","sample info","sample#"],
   "Details 1": ["details 1","detail 1","desc","description","info 1","notes 1"],
   "Details 2": ["details 2","detail 2","info 2","notes 2","extra"]
 };
-
 function canon(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'').trim(); }
-
 function buildHeaderMap(header){
-  const map = {}; // target -> actual header name
-  const canonHeader = header.map(h => ({raw:h, c: canon(h)}));
+  const map = {}; const canonHeader = header.map(h => ({raw:h, c: canon(h)}));
   for(const t of TARGET){
     const opts = [canon(t), ...((SYN[t]||[]).map(canon))];
     const found = canonHeader.find(h => opts.includes(h.c));
@@ -140,30 +158,18 @@ function buildHeaderMap(header){
   return map;
 }
 
-// ==== State ====
-const STATE = {
-  mode: 'OLDNEW',
-  rows: [],
-  mapOld: new Map(),  // normalize(Part#) -> rows[]
-  mapNew: new Map(),  // normalize(Standard) -> rows[]
-  headerMap: {},      // target -> actual header name found
-  missingPart: 0,
-};
+// State
+const STATE = { mode:'OLDNEW', rows:[], mapOld:new Map(), mapNew:new Map(), headerMap:{}, missingPart:0 };
 
-function get(r, key){
-  const h = STATE.headerMap[key];
-  return h ? (r[h] ?? '') : '';
-}
+function get(r, key){ const h = STATE.headerMap[key]; return h ? (r[h] ?? '') : ''; }
 
 function indexData(){
   STATE.mapOld = new Map(); STATE.mapNew = new Map(); STATE.missingPart = 0;
   for(const r of STATE.rows){
     const raw = get(r,"Part#");
     if(!raw){ STATE.missingPart++; continue; }
-    const kOld = normalize(raw);
-    if(kOld){ if(!STATE.mapOld.has(kOld)) STATE.mapOld.set(kOld, []); STATE.mapOld.get(kOld).push(r); }
-    const kNew = normalize(get(r,"Standard"));
-    if(kNew){ if(!STATE.mapNew.has(kNew)) STATE.mapNew.set(kNew, []); STATE.mapNew.get(kNew).push(r); }
+    const kOld = normalize(raw); if(kOld){ if(!STATE.mapOld.has(kOld)) STATE.mapOld.set(kOld, []); STATE.mapOld.get(kOld).push(r); }
+    const kNew = normalize(get(r,"Standard")); if(kNew){ if(!STATE.mapNew.has(kNew)) STATE.mapNew.set(kNew, []); STATE.mapNew.get(kNew).push(r); }
   }
 }
 
@@ -171,88 +177,48 @@ function setBadge(t){ document.getElementById('badge').textContent = t; }
 function showMsg(el, text){ el.innerHTML = `<div class="msg">${text}</div>`; }
 
 function loadCSVText(text){
-  const {header, rows} = parseCSV(text);
-  STATE.headerMap = buildHeaderMap(header);
+  const parsed = parseCSV(text);
+  STATE.headerMap = buildHeaderMap(parsed.header);
   const missing = TARGET.filter(t => !STATE.headerMap[t]);
-  setBadge(missing.length ? ('Missing headers: '+missing.join(', ')) : 'Ready');
-
-  STATE.rows = rows;
+  setBadge((missing.length?('Missing: '+missing.join(', '))+ ' • ': '') + 'Delimiter=' + (parsed.delimiter==='\\t'?'TAB':parsed.delimiter));
+  STATE.rows = parsed.rows;
   indexData();
   document.getElementById('rowCount').textContent = String(STATE.rows.length);
   document.getElementById('rowMissing').textContent = String(STATE.missingPart);
-  updateDebugPanel(header);
+  updateDebugPanel(parsed.header, parsed.delimiter);
   document.getElementById('results').innerHTML = '';
 }
 
-function updateDebugPanel(header){
+function updateDebugPanel(header, delim){
   const dbg = document.getElementById('debugInfo');
   const mapped = TARGET.map(t => `<li>${t} → <code>${STATE.headerMap[t]||'—'}</code></li>`).join('');
-  // sample keys
-  const sampleOld = Array.from(STATE.mapOld.keys()).slice(0,10).map(k=>`<code class="key">${k}</code>`).join(' ');
-  const sampleNew = Array.from(STATE.mapNew.keys()).slice(0,10).map(k=>`<code class="key">${k}</code>`).join(' ');
+  const sampleOld = Array.from(STATE.mapOld.keys()).slice(0,10).map(k=>`<code>${k}</code>`).join(' ');
+  const sampleNew = Array.from(STATE.mapNew.keys()).slice(0,10).map(k=>`<code>${k}</code>`).join(' ');
   dbg.innerHTML = `
     <div><b>Detected headers</b></div>
     <ul>${mapped}</ul>
     <div style="margin-top:8px;"><b>Sample normalized OLD keys (Part#):</b><br>${sampleOld || '<span class="small">none</span>'}</div>
     <div style="margin-top:8px;"><b>Sample normalized NEW keys (Standard):</b><br>${sampleNew || '<span class="small">none</span>'}</div>
     <div style="margin-top:8px;" class="small">Raw header row: ${header.map(h=>`<code>${h}</code>`).join(' ')}</div>
+    <div style="margin-top:8px;" class="small">Detected delimiter: <b>${delim==='\\t'?'TAB':delim}</b></div>
   `;
 
   const samples = document.getElementById('samples');
   const btns = [];
-  for(const k of Array.from(STATE.mapOld.keys()).slice(0,5)){
-    btns.push(`<button class="btn" data-val="${k}">Try OLD→NEW: ${k}</button>`);
-  }
-  for(const k of Array.from(STATE.mapNew.keys()).slice(0,5)){
-    btns.push(`<button class="btn" data-val="${k}">Try NEW→OLD: ${k}</button>`);
-  }
+  for(const k of Array.from(STATE.mapOld.keys()).slice(0,5)){ btns.push(`<button class="btn" data-val="${k}">Try OLD→NEW: ${k}</button>`); }
+  for(const k of Array.from(STATE.mapNew.keys()).slice(0,5)){ btns.push(`<button class="btn" data-val="${k}">Try NEW→OLD: ${k}</button>`); }
   samples.innerHTML = btns.join(' ');
   samples.querySelectorAll('button').forEach(b=>{
-    b.onclick = ()=>{
-      document.getElementById('q').value = b.getAttribute('data-val');
-      document.getElementById('search').click();
-    };
+    b.onclick = ()=>{ document.getElementById('q').value = b.getAttribute('data-val'); document.getElementById('search').click(); };
   });
-}
-
-// suggestions when no exact match
-function suggestionRowsFromOld(norm){
-  const out = [];
-  for(const [k, arr] of STATE.mapOld){
-    if(k.includes(norm)) out.push(...arr);
-    if(out.length>20) break;
-  }
-  return out;
-}
-function suggestionRowsFromNew(norm){
-  const out = [];
-  for(const [k, arr] of STATE.mapNew){
-    if(k.includes(norm)) out.push(...arr);
-    if(out.length>50) break;
-  }
-  return out;
 }
 
 function renderOldToNew(container, inputRaw){
   const norm = normalize(inputRaw);
   document.getElementById('normPreview').textContent = norm || '—';
   if(!norm){ showMsg(container, 'Enter an old part number to search.'); return; }
-
   const hits = STATE.mapOld.get(norm) || [];
-  if(hits.length === 0){
-    const sugg = suggestionRowsFromOld(norm);
-    if(sugg.length){
-      const table = document.createElement('table'); table.className='grid';
-      table.innerHTML = `<thead><tr><th>Old Part#</th><th>Status</th><th>Standard</th><th>Details 1</th><th>Details 2</th></tr></thead>
-                         <tbody>${sugg.map(r=>`<tr><td><code>${get(r,"Part#")}</code></td><td>${get(r,"Status")}</td><td><code>${get(r,"Standard")}</code></td><td>${get(r,"Details 1")}</td><td>${get(r,"Details 2")}</td></tr>`).join('')}</tbody>`;
-      container.innerHTML = `<div class="msg">No exact key match for <code>${norm}</code>. Showing suggestions containing that key:</div>`;
-      container.appendChild(table);
-    }else{
-      showMsg(container, `No results for “${inputRaw}”. (normalized: ${norm})`);
-    }
-    return;
-  }
-
+  if(hits.length === 0){ showMsg(container, `No results for “${inputRaw}”. (normalized: ${norm})`); return; }
   const list = document.createElement('div'); list.className='list';
   for(const r of hits){
     const status = String(get(r,"Status")).trim();
@@ -288,27 +254,8 @@ function renderNewToOld(container, inputRaw){
   const norm = normalize(inputRaw);
   document.getElementById('normPreview').textContent = norm || '—';
   if(!norm){ showMsg(container, 'Enter a new/standard part number to search.'); return; }
-
   const rows = STATE.mapNew.get(norm) || [];
-  if(rows.length === 0){
-    const sugg = suggestionRowsFromNew(norm);
-    if(sugg.length){
-      const uniq = new Map();
-      for(const r of sugg){
-        const old = String(get(r,"Part#")||""); if(!uniq.has(old)) uniq.set(old, {old, status:get(r,"Status"), d1:get(r,"Details 1"), d2:get(r,"Details 2")});
-      }
-      const data = Array.from(uniq.values());
-      const table = document.createElement('table'); table.className='grid';
-      table.innerHTML = `<thead><tr><th>Old Part#</th><th>Status</th><th>Details 1</th><th>Details 2</th></tr></thead>
-                         <tbody>${data.map(r=>`<tr><td><code>${r.old}</code></td><td>${r.status}</td><td>${r.d1}</td><td>${r.d2}</td></tr>`).join('')}</tbody>`;
-      container.innerHTML = `<div class="msg">No exact NEW key match for <code>${norm}</code>. Showing suggestions containing that key:</div>`;
-      container.appendChild(table);
-    }else{
-      showMsg(container, 'NEW configuration');
-    }
-    return;
-  }
-
+  if(rows.length === 0){ showMsg(container, 'NEW configuration'); return; }
   const uniq = new Map();
   for(const r of rows){
     const old = String(get(r,"Part#")||"");
@@ -321,7 +268,7 @@ function renderNewToOld(container, inputRaw){
   container.innerHTML = ''; container.appendChild(table);
 }
 
-// ==== UI wiring ====
+// UI
 const els = {
   tabOldNew: document.getElementById('tab-oldnew'),
   tabNewOld: document.getElementById('tab-newold'),
@@ -354,7 +301,6 @@ els.search.addEventListener('click', ()=>{
 els.q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ els.search.click(); } });
 els.refresh.addEventListener('click', ()=> init(true));
 
-// ==== Init ====
 async function init(noCache){
   try{
     setBadge('Loading…');
