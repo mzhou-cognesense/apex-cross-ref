@@ -171,17 +171,17 @@ function renderOldToNew(container, inputRaw){
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
               <div class="k">New Part (Standard)</div><div class="v"><code>${get(r,"Standard")}</code></div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
-              <div class="k">Details-AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
+              <div class="k">Details- AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
     }else if(isSP){
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
               <div class="k">Non Standard Info</div><div class="v">${get(r,"Non Standard")}</div>
               <div class="k">Sample</div><div class="v"><code>${get(r,"Sample")}</code></div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
-              <div class="k">Details-AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
+              <div class="k">Details- AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
     }else{
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
-              <div class="k">Details-AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
+              <div class="k">Details- AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
     }
     const card = document.createElement('div'); card.className='result';
     card.innerHTML = `<div class="k">Old Part#</div><div class="v"><code>${get(r,"Part#")}</code></div>
@@ -205,7 +205,7 @@ function renderNewToOld(container, inputRaw){
   }
   const data = Array.from(uniq.values());
   const table = document.createElement('table'); table.className='grid';
-  table.innerHTML = `<thead><tr><th>Old Part#</th><th>Status</th><th>Details- APEX</th><th>Details-AS 400</th></tr></thead>
+  table.innerHTML = `<thead><tr><th>Old Part#</th><th>Status</th><th>Details- APEX</th><th>Details- AS 400</th></tr></thead>
                      <tbody>${data.map(r=>`<tr><td><code>${r.old}</code></td><td>${r.status}</td><td>${r.d1}</td><td>${r.d2}</td></tr>`).join('')}</tbody>`;
   container.innerHTML = ''; container.appendChild(table);
 }
