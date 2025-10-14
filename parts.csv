@@ -1,6 +1,6 @@
-Part#,Product#,Product Line,Status,Standard,Non Standard,Sample,Details 1,Details 2
-3001,3001,,TBD,,,,,APPROVAL DRAWINGS
-94580-12111303,94580,Fire Protection,TBD,,,,,"2""NPT FA/EMG/VT AL/TB/SH"
+Part#,Product#,Product Line,Status,Standard,Non Standard,Sample,Details 1,Details 2,
+3001,3001,,TBD,,,,,APPROVAL DRAWINGS,
+94580-12111303,94580,Fire Protection,TBD,,,,,"2""NPT FA/EMG/VT AL/TB/SH",
 94020=19010100,94020,Pressure / Vacuum Vents,Standard,94020-1A1A10,,,Open Vent / 12in / ALUMINUM I-ST / ANSI-FF 150# / LOW / Standard / Lead / FEP,"12""BRTHR AL/FF INT/SEAT S"
 95021-030201,95021,Gauge Hatches,Standard,95021-08A200,,,"Quick Clamp / Aluminum / 8"" / ANSI-FF 150 lb. Bolted / Standard No Lock","8""FF ANSI G/H Q'CLMP AL/F"
 97180-452042001,97180,Wastewater - Tanks,Standard,97180-452042001,,,NoKit,DN400PN16FF FS-316L LS/SG
