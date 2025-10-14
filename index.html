@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Part Cross‑Reference — OLD↔NEW (Diagnostics v2)</title>
+  <title>Part Cross‑Reference — OLD↔NEW</title>
   <style>
     :root{--bg:#0f172a;--panel:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2937;--accent:#1d4ed8}
     *{box-sizing:border-box}
@@ -11,7 +11,7 @@
     header{padding:22px 16px;text-align:center}
     h1{margin:0 0 6px;font-size:24px}
     .hint{color:var(--muted);font-size:13px}
-    .wrap{max-width:1200px;margin:0 auto;padding:0 16px 40px}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 16px 40px}
     .panel{background:rgba(11,18,32,.95);backdrop-filter:saturate(140%) blur(6px);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
     .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
     input[type="text"]{flex:1;min-width:220px;padding:11px 12px;border-radius:12px;border:1px solid #334155;background:#0b1220;color:var(--ink)}
@@ -22,8 +22,7 @@
     .tab.active{background:var(--accent);border-color:#2563eb}
     .badge{font-size:12px;border:1px solid #334155;border-radius:999px;padding:2px 8px;color:#93c5fd;background:#0b1220;margin-left:auto}
     .meta{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:13px}
-    .content{display:grid;grid-template-columns: 1fr 360px;gap:14px;padding:14px}
-    .section{padding:0 0 8px}
+    .section{padding:14px}
     .result{display:grid;grid-template-columns: 220px 1fr;gap:8px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#0b1220}
     .k{color:#93c5fd}.v{color:var(--ink)}
     .list{display:flex;flex-direction:column;gap:10px}
@@ -32,17 +31,13 @@
     th{position:sticky;top:0;text-align:left;background:#0b1220;color:#93c5fd;border-bottom:1px solid var(--line);padding:8px}
     td{border-bottom:1px dashed #1f2937;padding:8px;vertical-align:top}
     code{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:1px 6px}
-    .card{border:1px solid #334155;border-radius:12px;padding:12px;background:#0b1220}
-    .small{font-size:12px;color:#94a3b8}
-    .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid #334155;border-radius:999px;padding:2px 8px;background:#0b1220;color:#93c5fd;font-size:12px}
-    .debug-list{font-size:12px;color:#cbd5e1;line-height:1.5}
-    .samples button{margin:4px 4px 0 0}
+    footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}
   </style>
 </head>
 <body>
 <header>
   <h1>Part Cross‑Reference</h1>
-  <div class="hint">Diagnostics build: handles CRLF/CR/LF line endings and auto-detects comma/semicolon/tab delimiters. Data auto-loads from <code>parts.csv</code>.</div>
+  <div class="hint">Enter a part number. Modes: <b>OLD → NEW</b> or <b>NEW → OLD</b>. Data auto‑loads from <code>parts.csv</code>.</div>
 </header>
 
 <div class="wrap">
@@ -58,55 +53,36 @@
     </div>
 
     <div class="meta">
-      <div>Rows: <span id="rowCount">0</span> • Rows missing Part#: <span id="rowMissing">0</span></div>
-      <div>Mode: <b id="modeName">OLD → NEW</b> • Normalized input: <code id="normPreview">—</code></div>
+      <div>Rows: <span id="rowCount">0</span></div>
+      <div>Mode: <b id="modeName">OLD → NEW</b> • Normalized: <code id="normPreview">—</code></div>
     </div>
 
-    <div class="content">
-      <div class="section">
-        <div id="results"></div>
-      </div>
-      <aside class="section">
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-            <div class="pill">Diagnostics</div>
-            <button id="refresh" class="btn">Reload data</button>
-          </div>
-          <div class="debug-list" id="debugInfo">Parsing…</div>
-          <div class="samples" id="samples"></div>
-        </div>
-      </aside>
+    <div class="section">
+      <div id="results"></div>
     </div>
   </div>
+  <footer>Update data by replacing <code>parts.csv</code> in this repository.</footer>
 </div>
 
 <script>
 function normalize(s){ return String(s||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase(); }
 
-// Get the first line end index and delimiter from the first line
-function detectDelimiterAndLineEnd(text){
-  // find first line break: \r\n, \n, or \r
-  let i = text.indexOf("\\r\\n");
-  let len = 2;
-  if(i === -1){ i = text.indexOf("\\n"); len = 1; }
-  if(i === -1){ i = text.indexOf("\\r"); len = 1; }
-  if(i === -1){ i = text.length; len = 0; } // single-line file
-  const firstLine = text.slice(0, i);
-  const counts = {',':0,';':0,'\\t':0};
+function detectDelimiter(text){
+  const firstBreak = text.search(/\r\n|\n|\r/);
+  const firstLine = firstBreak === -1 ? text : text.slice(0, firstBreak);
+  const counts = {',':0,';':0,'\t':0};
   for(const ch of firstLine){ if(ch===',') counts[',']++; else if(ch===';') counts[';']++; }
-  const tabCount = (firstLine.match(/\\t/g)||[]).length; counts['\\t']=tabCount;
-  // pick delimiter with highest count
-  let delim = ','; let max = counts[','];
+  counts['\t'] = (firstLine.match(/\t/g)||[]).length;
+  let delim = ',', max = counts[','];
   if(counts[';'] > max){ delim = ';'; max = counts[';']; }
-  if(counts['\\t'] > max){ delim = '\\t'; max = counts['\\t']; }
-  return {delim, lineBreakLen: len};
+  if(counts['\t'] > max){ delim = '\t'; max = counts['\t']; }
+  return delim;
 }
 
-// Robust CSV parser with chosen delimiter and CRLF/LF/CR line-ends
 function parseCSV(text){
-  const {delim} = detectDelimiterAndLineEnd(text);
+  const delim = detectDelimiter(text);
   const rows = []; let i=0, ch, inQ=false, field='', row=[];
-  const D = (delim==='\\t') ? '\\t' : delim; // actual delimiter char
+  const D = (delim==='\t') ? '\t' : delim;
   function pushField(){ row.push(field); field=''; }
   function pushRow(){ rows.push(row); row=[]; }
   while(i<text.length){
@@ -116,12 +92,9 @@ function parseCSV(text){
       field += ch; i++; continue;
     }else{
       if(ch === '"'){ inQ=true; i++; continue; }
-      if((D==='\\t' && ch === '\\t') || (D!== '\\t' && ch === D)){ pushField(); i++; continue; }
-      if(ch === '\\r'){ // handle CR or CRLF
-        if(text[i+1] === '\\n'){ i++; } // skip the LF in CRLF
-        pushField(); pushRow(); i++; continue;
-      }
-      if(ch === '\\n'){ pushField(); pushRow(); i++; continue; }
+      if((D==='\t' && ch==='\t') || (D!=='\t' && ch===D)){ pushField(); i++; continue; }
+      if(ch==='\r'){ if(text[i+1]==='\n') i++; pushField(); pushRow(); i++; continue; }
+      if(ch==='\n'){ pushField(); pushRow(); i++; continue; }
       field += ch; i++; continue;
     }
   }
@@ -131,10 +104,9 @@ function parseCSV(text){
   const objs = rows.filter(r=>r.length && r.some(x=>x!=='')).map(cols=>{
     const o={}; header.forEach((h,idx)=>o[h]=(cols[idx]||'').trim()); return o;
   });
-  return {header, rows: objs, delimiter: D};
+  return {header, rows: objs};
 }
 
-// Header mapping with synonyms
 const TARGET = ["Part#","Product#","Product Line","Status","Standard","Non Standard","Sample","Details 1","Details 2"];
 const SYN = {
   "Part#": ["part#","part #","partnumber","part number","part_no","partno","old part","old part#","old part number"],
@@ -158,17 +130,13 @@ function buildHeaderMap(header){
   return map;
 }
 
-// State
-const STATE = { mode:'OLDNEW', rows:[], mapOld:new Map(), mapNew:new Map(), headerMap:{}, missingPart:0 };
-
+const STATE = { mode:'OLDNEW', rows:[], mapOld:new Map(), mapNew:new Map(), headerMap:{}};
 function get(r, key){ const h = STATE.headerMap[key]; return h ? (r[h] ?? '') : ''; }
 
 function indexData(){
-  STATE.mapOld = new Map(); STATE.mapNew = new Map(); STATE.missingPart = 0;
+  STATE.mapOld = new Map(); STATE.mapNew = new Map();
   for(const r of STATE.rows){
-    const raw = get(r,"Part#");
-    if(!raw){ STATE.missingPart++; continue; }
-    const kOld = normalize(raw); if(kOld){ if(!STATE.mapOld.has(kOld)) STATE.mapOld.set(kOld, []); STATE.mapOld.get(kOld).push(r); }
+    const kOld = normalize(get(r,"Part#")); if(kOld){ if(!STATE.mapOld.has(kOld)) STATE.mapOld.set(kOld, []); STATE.mapOld.get(kOld).push(r); }
     const kNew = normalize(get(r,"Standard")); if(kNew){ if(!STATE.mapNew.has(kNew)) STATE.mapNew.set(kNew, []); STATE.mapNew.get(kNew).push(r); }
   }
 }
@@ -179,38 +147,11 @@ function showMsg(el, text){ el.innerHTML = `<div class="msg">${text}</div>`; }
 function loadCSVText(text){
   const parsed = parseCSV(text);
   STATE.headerMap = buildHeaderMap(parsed.header);
-  const missing = TARGET.filter(t => !STATE.headerMap[t]);
-  setBadge((missing.length?('Missing: '+missing.join(', '))+ ' • ': '') + 'Delimiter=' + (parsed.delimiter==='\\t'?'TAB':parsed.delimiter));
   STATE.rows = parsed.rows;
   indexData();
   document.getElementById('rowCount').textContent = String(STATE.rows.length);
-  document.getElementById('rowMissing').textContent = String(STATE.missingPart);
-  updateDebugPanel(parsed.header, parsed.delimiter);
   document.getElementById('results').innerHTML = '';
-}
-
-function updateDebugPanel(header, delim){
-  const dbg = document.getElementById('debugInfo');
-  const mapped = TARGET.map(t => `<li>${t} → <code>${STATE.headerMap[t]||'—'}</code></li>`).join('');
-  const sampleOld = Array.from(STATE.mapOld.keys()).slice(0,10).map(k=>`<code>${k}</code>`).join(' ');
-  const sampleNew = Array.from(STATE.mapNew.keys()).slice(0,10).map(k=>`<code>${k}</code>`).join(' ');
-  dbg.innerHTML = `
-    <div><b>Detected headers</b></div>
-    <ul>${mapped}</ul>
-    <div style="margin-top:8px;"><b>Sample normalized OLD keys (Part#):</b><br>${sampleOld || '<span class="small">none</span>'}</div>
-    <div style="margin-top:8px;"><b>Sample normalized NEW keys (Standard):</b><br>${sampleNew || '<span class="small">none</span>'}</div>
-    <div style="margin-top:8px;" class="small">Raw header row: ${header.map(h=>`<code>${h}</code>`).join(' ')}</div>
-    <div style="margin-top:8px;" class="small">Detected delimiter: <b>${delim==='\\t'?'TAB':delim}</b></div>
-  `;
-
-  const samples = document.getElementById('samples');
-  const btns = [];
-  for(const k of Array.from(STATE.mapOld.keys()).slice(0,5)){ btns.push(`<button class="btn" data-val="${k}">Try OLD→NEW: ${k}</button>`); }
-  for(const k of Array.from(STATE.mapNew.keys()).slice(0,5)){ btns.push(`<button class="btn" data-val="${k}">Try NEW→OLD: ${k}</button>`); }
-  samples.innerHTML = btns.join(' ');
-  samples.querySelectorAll('button').forEach(b=>{
-    b.onclick = ()=>{ document.getElementById('q').value = b.getAttribute('data-val'); document.getElementById('search').click(); };
-  });
+  setBadge('Ready');
 }
 
 function renderOldToNew(container, inputRaw){
@@ -219,6 +160,7 @@ function renderOldToNew(container, inputRaw){
   if(!norm){ showMsg(container, 'Enter an old part number to search.'); return; }
   const hits = STATE.mapOld.get(norm) || [];
   if(hits.length === 0){ showMsg(container, `No results for “${inputRaw}”. (normalized: ${norm})`); return; }
+
   const list = document.createElement('div'); list.className='list';
   for(const r of hits){
     const status = String(get(r,"Status")).trim();
@@ -233,7 +175,7 @@ function renderOldToNew(container, inputRaw){
     }else if(isSP){
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
               <div class="k">Non Standard Info</div><div class="v">${get(r,"Non Standard")}</div>
-              <div class="k">Sample</div><div class="v">${get(r,"Sample")}</div>
+              <div class="k">Sample</div><div class="v"><code>${get(r,"Sample")}</code></div>
               <div class="k">Details 1</div><div class="v">${get(r,"Details 1")}</div>
               <div class="k">Details 2</div><div class="v">${get(r,"Details 2")}</div>`;
     }else{
@@ -268,7 +210,6 @@ function renderNewToOld(container, inputRaw){
   container.innerHTML = ''; container.appendChild(table);
 }
 
-// UI
 const els = {
   tabOldNew: document.getElementById('tab-oldnew'),
   tabNewOld: document.getElementById('tab-newold'),
@@ -278,9 +219,7 @@ const els = {
   modeName: document.getElementById('modeName'),
   normPreview: document.getElementById('normPreview'),
   rowCount: document.getElementById('rowCount'),
-  rowMissing: document.getElementById('rowMissing'),
   badge: document.getElementById('badge'),
-  refresh: document.getElementById('refresh'),
 };
 
 function setMode(m){
@@ -299,22 +238,20 @@ els.search.addEventListener('click', ()=>{
   else renderNewToOld(els.results, val);
 });
 els.q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ els.search.click(); } });
-els.refresh.addEventListener('click', ()=> init(true));
 
-async function init(noCache){
+async function init(){
   try{
     setBadge('Loading…');
-    const res = await fetch('parts.csv', {cache: noCache ? 'no-store' : 'default'});
+    const res = await fetch('parts.csv', {cache: 'no-store'});
     if(!res.ok) throw new Error('parts.csv not found');
     const text = await res.text();
     loadCSVText(text);
-    setBadge('Ready');
   }catch(e){
-    setBadge('Error: '+e.message);
+    setBadge('Error');
     showMsg(document.getElementById('results'), 'Could not load parts.csv. Ensure it is in the repo root next to index.html.');
   }
 }
-init(true);
+init();
 </script>
 </body>
 </html>
