@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Part Cross‑Reference — OLD↔NEW</title>
   <style>
-    :root{--bg:#0f172a;--panel:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2937;--accent:#1d4ed8}
+    :root{--bg:#0f172a;--panel:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2937;--accent:#1d4ed8;--ok:#10b981}
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(180deg,#0b1024,#0f172a);color:var(--ink)}
     header{padding:22px 16px;text-align:center}
@@ -31,13 +31,18 @@
     th{position:sticky;top:0;text-align:left;background:#0b1220;color:#93c5fd;border-bottom:1px solid var(--line);padding:8px}
     td{border-bottom:1px dashed #1f2937;padding:8px;vertical-align:top}
     code{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:1px 6px}
+    code.copy{cursor:pointer;position:relative}
+    code.copy:hover{border-color:#60a5fa}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;padding:10px 14px;border:1px solid #1f2937;border-radius:999px;background:#0b1220;color:var(--ink);box-shadow:0 10px 20px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .25s}
+    .toast.show{opacity:1}
+    .ok{color:var(--ok);font-weight:600;margin-right:6px}
     footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}
   </style>
 </head>
 <body>
 <header>
   <h1>Part Cross‑Reference</h1>
-  <div class="hint">Enter a part number. Modes: <b>OLD → NEW</b> or <b>NEW → OLD</b>. Data auto‑loads from <code>parts.csv</code>.</div>
+  <div class="hint">Enter a part number. Modes: <b>OLD → NEW</b> or <b>NEW → OLD</b>. Data auto‑loads from <code>parts.csv</code>. <span class="ok">Tip:</span> click a <code>part</code> to copy.</div>
 </header>
 
 <div class="wrap">
@@ -64,25 +69,27 @@
   <footer>Update data by replacing <code>parts.csv</code> in this repository.</footer>
 </div>
 
+<div id="toast" class="toast">Copied</div>
+
 <script>
 function normalize(s){ return String(s||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase(); }
 
 function detectDelimiter(text){
-  const firstBreak = text.search(/\r\n|\n|\r/);
+  const firstBreak = text.search(/\\r\\n|\\n|\\r/);
   const firstLine = firstBreak === -1 ? text : text.slice(0, firstBreak);
-  const counts = {',':0,';':0,'\t':0};
+  const counts = {',':0,';':0,'\\t':0};
   for(const ch of firstLine){ if(ch===',') counts[',']++; else if(ch===';') counts[';']++; }
-  counts['\t'] = (firstLine.match(/\t/g)||[]).length;
+  counts['\\t'] = (firstLine.match(/\\t/g)||[]).length;
   let delim = ',', max = counts[','];
   if(counts[';'] > max){ delim = ';'; max = counts[';']; }
-  if(counts['\t'] > max){ delim = '\t'; max = counts['\t']; }
+  if(counts['\\t'] > max){ delim = '\\t'; max = counts['\\t']; }
   return delim;
 }
 
 function parseCSV(text){
   const delim = detectDelimiter(text);
   const rows = []; let i=0, ch, inQ=false, field='', row=[];
-  const D = (delim==='\t') ? '\t' : delim;
+  const D = (delim==='\\t') ? '\\t' : delim;
   function pushField(){ row.push(field); field=''; }
   function pushRow(){ rows.push(row); row=[]; }
   while(i<text.length){
@@ -92,9 +99,9 @@ function parseCSV(text){
       field += ch; i++; continue;
     }else{
       if(ch === '"'){ inQ=true; i++; continue; }
-      if((D==='\t' && ch==='\t') || (D!=='\t' && ch===D)){ pushField(); i++; continue; }
-      if(ch==='\r'){ if(text[i+1]==='\n') i++; pushField(); pushRow(); i++; continue; }
-      if(ch==='\n'){ pushField(); pushRow(); i++; continue; }
+      if((D==='\\t' && ch==='\\t') || (D!=='\\t' && ch===D)){ pushField(); i++; continue; }
+      if(ch==='\\r'){ if(text[i+1]==='\\n') i++; pushField(); pushRow(); i++; continue; }
+      if(ch==='\\n'){ pushField(); pushRow(); i++; continue; }
       field += ch; i++; continue;
     }
   }
@@ -154,6 +161,35 @@ function loadCSVText(text){
   setBadge('Ready');
 }
 
+// --- COPY TO CLIPBOARD ---
+const toast = { el: null, timer: null };
+function showToast(msg){
+  if(!toast.el){ toast.el = document.getElementById('toast'); }
+  toast.el.textContent = msg;
+  toast.el.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(()=> toast.el.classList.remove('show'), 1200);
+}
+async function copyText(t){
+  try{
+    await navigator.clipboard.writeText(t);
+    showToast('Copied: ' + (t.length>40? t.slice(0,37)+'…' : t));
+  }catch(e){
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); showToast('Copied'); } finally { document.body.removeChild(ta); }
+  }
+}
+
+function copyCodeHTML(value){ return `<code class="copy" title="Click to copy" data-copy="${value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}">${value.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code>`; }
+
+// Delegate clicks for any .copy element
+document.addEventListener('click', (e)=>{
+  const el = e.target.closest('code.copy');
+  if(el){ const val = el.getAttribute('data-copy') || el.textContent; copyText(val); }
+});
+
 function renderOldToNew(container, inputRaw){
   const norm = normalize(inputRaw);
   document.getElementById('normPreview').textContent = norm || '—';
@@ -169,13 +205,13 @@ function renderOldToNew(container, inputRaw){
     let body = '';
     if(isStandard){
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
-              <div class="k">New Part (Standard)</div><div class="v"><code>${get(r,"Standard")}</code></div>
+              <div class="k">New Part (Standard)</div><div class="v">${copyCodeHTML(get(r,"Standard"))}</div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
               <div class="k">Details- AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
     }else if(isSP){
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
               <div class="k">Non Standard Info</div><div class="v">${get(r,"Non Standard")}</div>
-              <div class="k">Sample</div><div class="v"><code>${get(r,"Sample")}</code></div>
+              <div class="k">Sample</div><div class="v">${copyCodeHTML(get(r,"Sample"))}</div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
               <div class="k">Details- AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
     }else{
@@ -184,7 +220,7 @@ function renderOldToNew(container, inputRaw){
               <div class="k">Details- AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
     }
     const card = document.createElement('div'); card.className='result';
-    card.innerHTML = `<div class="k">Old Part#</div><div class="v"><code>${get(r,"Part#")}</code></div>
+    card.innerHTML = `<div class="k">Old Part#</div><div class="v">${copyCodeHTML(get(r,"Part#"))}</div>
                       <div class="k">Product#</div><div class="v">${get(r,"Product#")}</div>
                       <div class="k">Product Line</div><div class="v">${get(r,"Product Line")}</div>${body}`;
     list.appendChild(card);
@@ -206,10 +242,11 @@ function renderNewToOld(container, inputRaw){
   const data = Array.from(uniq.values());
   const table = document.createElement('table'); table.className='grid';
   table.innerHTML = `<thead><tr><th>Old Part#</th><th>Status</th><th>Details- APEX</th><th>Details- AS 400</th></tr></thead>
-                     <tbody>${data.map(r=>`<tr><td><code>${r.old}</code></td><td>${r.status}</td><td>${r.d1}</td><td>${r.d2}</td></tr>`).join('')}</tbody>`;
+                     <tbody>${data.map(r=>`<tr><td>${copyCodeHTML(r.old)}</td><td>${r.status}</td><td>${r.d1}</td><td>${r.d2}</td></tr>`).join('')}</tbody>`;
   container.innerHTML = ''; container.appendChild(table);
 }
 
+// UI
 const els = {
   tabOldNew: document.getElementById('tab-oldnew'),
   tabNewOld: document.getElementById('tab-newold'),
