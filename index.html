@@ -4,7 +4,236 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Part Cross‑Reference — OLD→NEW / NEW→OLD</title>
+  <style><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Part Cross‑Reference — OLD→NEW / NEW→OLD</title>
   <style>
+    :root{--bg:#0f172a;--panel:#0b1220;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2937;--accent:#1d4ed8}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(180deg,#0b1024,#0f172a);color:var(--ink)}
+    header{padding:28px 16px;text-align:center}
+    h1{margin:0 0 6px;font-size:24px}
+    .hint{color:var(--muted);font-size:13px}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 16px 60px}
+    .panel{background:rgba(11,18,32,.9);backdrop-filter:saturate(140%) blur(6px);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
+    input[type="text"]{flex:1;min-width:220px;padding:11px 12px;border-radius:12px;border:1px solid #334155;background:#0b1220;color:var(--ink)}
+    .btn{padding:10px 12px;border-radius:12px;border:1px solid #334155;background:#0b1220;color:var(--ink);cursor:pointer}
+    .btn.primary{background:var(--accent);border-color:#2563eb}
+    .tabs{display:flex;gap:8px;margin-right:auto}
+    .tab{padding:8px 12px;border-radius:999px;border:1px solid #334155;cursor:pointer;background:#0b1220;color:var(--ink);font-weight:600}
+    .tab.active{background:var(--accent);border-color:#2563eb}
+    .badge{font-size:12px;border:1px solid #334155;border-radius:999px;padding:2px 8px;color:#93c5fd;background:#0b1220;margin-left:auto}
+    .meta{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:13px}
+    .section{padding:14px}
+    .result{display:grid;grid-template-columns: 220px 1fr;gap:8px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#0b1220}
+    .k{color:#93c5fd}
+    .v{color:var(--ink)}
+    .list{display:flex;flex-direction:column;gap:10px}
+    .msg{padding:12px;border:1px dashed #334155;border-radius:10px;color:var(--muted);background:#0b1220}
+    .grid{width:100%;border-collapse:separate;border-spacing:0}
+    th{position:sticky;top:0;text-align:left;background:#0b1220;color:#93c5fd;border-bottom:1px solid var(--line);padding:8px}
+    td{border-bottom:1px dashed #1f2937;padding:8px;vertical-align:top}
+    footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}
+    code{background:#0b1220;padding:2px 6px;border-radius:6px;border:1px solid #334155}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Part Cross‑Reference</h1>
+    <div class="hint">
+      Modes: <b>OLD → NEW</b> and <b>NEW → OLD</b>. Data is loaded automatically from <code>parts.csv</code> in this repository.
+      Required headers: <code>Part#, Product#, Product Line, Status, Standard, Non Standard, Sample, Details 1, Details 2</code>.
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="panel" id="app">
+
+      <div class="toolbar">
+        <div class="tabs">
+          <button class="tab active" id="tab-oldnew">OLD → NEW</button>
+          <button class="tab" id="tab-newold">NEW → OLD</button>
+        </div>
+        <input id="q" type="text" placeholder="Enter part number…" autocomplete="off" />
+        <button id="search" class="btn primary">Search</button>
+        <span id="badge" class="badge">Loading…</span>
+      </div>
+
+      <div class="meta">
+        <div>Rows: <span id="rowCount">0</span> • Rows missing Part#: <span id="rowMissing">0</span></div>
+        <div>Mode: <b id="modeName">OLD → NEW</b> • Normalized input: <code id="normPreview">—</code></div>
+      </div>
+
+      <div class="section">
+        <div id="results"></div>
+      </div>
+
+    </div>
+    <footer>To update data, replace <code>parts.csv</code> in GitHub and refresh this page.</footer>
+  </div>
+
+<script>
+// -- Normalize: keep alphanumerics only, uppercase
+function normalize(s){ return String(s||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase(); }
+
+// Robust CSV parser (supports quoted fields and commas)
+function parseCSV(text){
+  const rows = []; let i=0, ch, inQ=false, field='', row=[];
+  function pushField(){ row.push(field); field=''; }
+  function pushRow(){ rows.push(row); row=[]; }
+  while(i<text.length){
+    ch = text[i];
+    if(inQ){
+      if(ch === '"'){ if(text[i+1] === '"'){ field+='"'; i+=2; continue; } inQ=false; i++; continue; }
+      field += ch; i++; continue;
+    }else{
+      if(ch === '"'){ inQ=true; i++; continue; }
+      if(ch === ','){ pushField(); i++; continue; }
+      if(ch === '\\r'){ i++; continue; }
+      if(ch === '\\n'){ pushField(); pushRow(); i++; continue; }
+      field += ch; i++; continue;
+    }
+  }
+  if(field.length>0 || row.length>0){ pushField(); pushRow(); }
+  const header = rows.shift().map(h=>h.trim());
+  const objs = rows.filter(r=>r.length && r.some(x=>x!=='')).map(cols=>{
+    const o={}; header.forEach((h,idx)=>o[h]=(cols[idx]||'').trim()); return o;
+  });
+  return {header, rows: objs};
+}
+
+const REQUIRED = ["Part#","Product#","Product Line","Status","Standard","Non Standard","Sample","Details 1","Details 2"];
+const STATE = { mode:'OLDNEW', rows:[], byRaw:new Map(), byStd:new Map(), missingPart:0 };
+
+function indexData(){
+  STATE.byRaw = new Map(); STATE.byStd = new Map(); STATE.missingPart = 0;
+  for(const r of STATE.rows){
+    const raw = r["Part#"];
+    if(!raw){ STATE.missingPart++; continue; }
+    const key = normalize(raw);
+    if(key){ if(!STATE.byRaw.has(key)) STATE.byRaw.set(key, []); STATE.byRaw.get(key).push(r); }
+    const std = normalize(r["Standard"]);
+    if(std){ if(!STATE.byStd.has(std)) STATE.byStd.set(std, []); STATE.byStd.get(std).push(r); }
+  }
+}
+
+function setBadge(t){ document.getElementById('badge').textContent = t; }
+function showMsg(el, text){ el.innerHTML = `<div class="msg">${text}</div>`; }
+
+function loadCSVText(text){
+  const {header, rows} = parseCSV(text);
+  const miss = REQUIRED.filter(c=>!header.includes(c));
+  setBadge(miss.length ? ('Missing: '+miss.join(', ')) : 'Ready');
+  STATE.rows = rows; indexData();
+  document.getElementById('rowCount').textContent = String(STATE.rows.length);
+  document.getElementById('rowMissing').textContent = String(STATE.missingPart);
+  document.getElementById('results').innerHTML = '';
+}
+
+function renderOldToNew(container, inputRaw){
+  const norm = normalize(inputRaw);
+  document.getElementById('normPreview').textContent = norm || '—';
+  if(!norm){ showMsg(container, 'Enter an old part number to search.'); return; }
+  const hits = STATE.byRaw.get(norm) || [];
+  if(hits.length===0){ showMsg(container, `No results for “${inputRaw}”. (normalized: ${norm})`); return; }
+  const list = document.createElement('div'); list.className='list';
+  for(const r of hits){
+    const status = String(r["Status"]||'').trim();
+    const isStandard = status.toLowerCase()==='standard';
+    const isSP = status.toUpperCase()==='SP';
+    let extra = '';
+    if(isStandard){
+      extra = `<div class="k">Status</div><div class="v"><b>${r["Status"]||""}</b></div>
+               <div class="k">New Part (Standard)</div><div class="v"><code>${r["Standard"]||""}</code></div>
+               <div class="k">Details 1</div><div class="v">${r["Details 1"]||""}</div>
+               <div class="k">Details 2</div><div class="v">${r["Details 2"]||""}</div>`;
+    }else if(isSP){
+      extra = `<div class="k">Status</div><div class="v"><b>${r["Status"]||""}</b></div>
+               <div class="k">Non Standard Info</div><div class="v">${r["Non Standard"]||""}</div>
+               <div class="k">Sample</div><div class="v">${r["Sample"]||""}</div>
+               <div class="k">Details 1</div><div class="v">${r["Details 1"]||""}</div>
+               <div class="k">Details 2</div><div class="v">${r["Details 2"]||""}</div>`;
+    }else{
+      extra = `<div class="k">Status</div><div class="v"><b>${r["Status"]||""}</b></div>
+               <div class="k">Details 1</div><div class="v">${r["Details 1"]||""}</div>
+               <div class="k">Details 2</div><div class="v">${r["Details 2"]||""}</div>`;
+    }
+    const card = document.createElement('div');
+    card.className='result';
+    card.innerHTML = `<div class="k">Old Part#</div><div class="v"><code>${r["Part#"]||""}</code></div>
+                      <div class="k">Product#</div><div class="v">${r["Product#"]||""}</div>
+                      <div class="k">Product Line</div><div class="v">${r["Product Line"]||""}</div>${extra}`;
+    list.appendChild(card);
+  }
+  container.innerHTML=''; container.appendChild(list);
+}
+
+function renderNewToOld(container, inputRaw){
+  const norm = normalize(inputRaw);
+  document.getElementById('normPreview').textContent = norm || '—';
+  if(!norm){ showMsg(container, 'Enter a new/standard part number to search.'); return; }
+  const rows = STATE.byStd.get(norm) || [];
+  if(rows.length===0){ showMsg(container, 'NEW configuration'); return; }
+  const uniq = new Map();
+  for(const r of rows){ const old = String(r["Part#"]||""); if(!uniq.has(old)) uniq.set(old, {old, status:r["Status"]||"", d1:r["Details 1"]||"", d2:r["Details 2"]||""}); }
+  const data = Array.from(uniq.values());
+  const table = document.createElement('table'); table.className='grid';
+  table.innerHTML = `<thead><tr><th>Old Part#</th><th>Status</th><th>Details 1</th><th>Details 2</th></tr></thead>
+                     <tbody>${data.map(r=>`<tr><td><code>${r.old}</code></td><td>${r.status}</td><td>${r.d1}</td><td>${r.d2}</td></tr>`).join('')}</tbody>`;
+  container.innerHTML=''; container.appendChild(table);
+}
+
+const els = {
+  tabOldNew: document.getElementById('tab-oldnew'),
+  tabNewOld: document.getElementById('tab-newold'),
+  q: document.getElementById('q'),
+  search: document.getElementById('search'),
+  results: document.getElementById('results'),
+  modeName: document.getElementById('modeName'),
+  normPreview: document.getElementById('normPreview'),
+  rowCount: document.getElementById('rowCount'),
+  rowMissing: document.getElementById('rowMissing'),
+  badge: document.getElementById('badge'),
+};
+
+function setMode(m){
+  STATE.mode = m;
+  els.modeName.textContent = (m==='OLDNEW') ? 'OLD → NEW' : 'NEW → OLD';
+  els.tabOldNew.classList.toggle('active', m==='OLDNEW');
+  els.tabNewOld.classList.toggle('active', m==='NEWOLD');
+  els.results.innerHTML = '';
+}
+
+els.tabOldNew.addEventListener('click', ()=> setMode('OLDNEW'));
+els.tabNewOld.addEventListener('click', ()=> setMode('NEWOLD'));
+els.search.addEventListener('click', ()=>{
+  const val = els.q.value;
+  if(STATE.mode==='OLDNEW') renderOldToNew(els.results, val);
+  else renderNewToOld(els.results, val);
+});
+els.q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ els.search.click(); } });
+
+async function init(){
+  try{
+    const res = await fetch('parts.csv', {cache:'no-store'});
+    if(!res.ok) throw new Error('parts.csv not found');
+    const text = await res.text();
+    loadCSVText(text);
+    setBadge('Ready');
+  }catch(e){
+    setBadge('Error: '+e.message);
+    showMsg(document.getElementById('results'), 'Could not load parts.csv from this repository. Make sure it is at the root next to index.html.');
+  }
+}
+init();
+</script>
+</body>
+</html>
+
     :root{
       --bg:#0f172a; --panel:#0b1220; --ink:#e5e7eb; --muted:#94a3b8; --line:#1f2937;
       --brand:#60a5fa; --accent:#1d4ed8; --warn:#f59e0b; --ok:#22c55e;
