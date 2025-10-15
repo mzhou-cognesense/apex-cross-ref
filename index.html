@@ -179,12 +179,12 @@ function renderOldToNew(container, inputRaw){
               <div class="k">New Part (Standard)</div><div class="v"><code>${get(r,"Standard")}</code></div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
               <div class="k">Details-AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
-    }else if(isSP){
-      body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
-              <div class="k">Non Standard Info</div><div class="v">${get(r,"Non Standard")}</div>
-              <div class="k">Sample</div><div class="v"><code>${get(r,"Sample")}</code></div>
-              <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
-              <div class="k">Details-AS 400</div><div class="v">${get(r,"Details 2")}</div>`;
+  }else if(isSP){
+  body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
+          <div class="k">Non Standard Info</div><div class="v">${get(r,"Non Standard")}</div>
+          <div class="k">Sample - Similar standard parts</div><div class="v"><code>${get(r,"Sample")}</code></div>
+          <div class="k">Details- APEX - Standard Sample</div><div class="v">${get(r,"Details 1")}</div>
+          <div class="k">Details- AS 400 - OLD Part#</div><div class="v">${get(r,"Details 2")}</div>`;
     }else{
       body = `<div class="k">Status</div><div class="v"><b>${get(r,"Status")}</b></div>
               <div class="k">Details- APEX</div><div class="v">${get(r,"Details 1")}</div>
